@@ -5,6 +5,7 @@ target/
 !**/src/test/**/target/
 /logs/
 .checkstyle
+.claude/worktrees/
 
 ### STS ###
 .apt_generated
