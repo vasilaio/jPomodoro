@@ -175,21 +175,9 @@ public final class PomodoroApp extends Application {
   private void configureSpinners() {
     this.workSpinner = this.minutesSpinner(this.settings.getWorkMinutes());
     this.workSpinner.valueProperty().addListener((_, _, _) -> this.settings.setWorkMinutes(this.workSpinner.getValue()));
-//    this.workSpinner.getEditor().setOnKeyPressed(event -> {
-//      if (event.getCode() == KeyCode.TAB && !event.isShiftDown()) {
-//        event.consume();
-//        this.breakSpinner.getEditor().requestFocus();
-//      }
-//    });
 
     this.breakSpinner = this.minutesSpinner(this.settings.getBreakMinutes());
     this.breakSpinner.valueProperty().addListener((_, _, _) -> this.settings.setBreakMinutes(this.breakSpinner.getValue()));
-//    this.breakSpinner.getEditor().setOnKeyPressed(event -> {
-//      if (event.getCode() == KeyCode.TAB && event.isShiftDown()) {
-//        event.consume();
-//        this.workSpinner.getEditor().requestFocus();
-//      }
-//    });
     this.settings.save();
   }
 
