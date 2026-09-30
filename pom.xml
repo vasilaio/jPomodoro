@@ -13,6 +13,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
     <javafx.version>25.0.1</javafx.version>
+    <gson.version>2.14.0</gson.version>
 
     <maven.compiler.release>25</maven.compiler.release>
   </properties>
@@ -22,6 +23,11 @@
       <groupId>org.openjfx</groupId>
       <artifactId>javafx-controls</artifactId>
       <version>${javafx.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>${gson.version}</version>
     </dependency>
   </dependencies>
 
@@ -78,8 +84,7 @@
             <phase>package</phase>
             <configuration>
               <target>
-                <copy file="${project.build.directory}/${project.build.finalName}.jar"
-                      todir="${project.build.directory}/jpackage-input" />
+                <copy file="${project.build.directory}/${project.build.finalName}.jar" todir="${project.build.directory}/jpackage-input" />
               </target>
             </configuration>
             <goals><goal>run</goal></goals>

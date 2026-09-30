@@ -1,12 +1,13 @@
 package ro.kbs.jpomodoro;
 
 import java.awt.AWTException;
+import java.awt.Color;
 import java.awt.MenuItem;
 import java.awt.PopupMenu;
 import java.awt.SystemTray;
+import java.awt.Toolkit;
 import java.awt.TrayIcon;
 import java.awt.image.BufferedImage;
-import java.util.prefs.Preferences;
 import javafx.animation.Animation;
 import javafx.animation.FadeTransition;
 import javafx.animation.KeyFrame;
@@ -15,6 +16,7 @@ import javafx.animation.Timeline;
 import javafx.animation.TranslateTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.css.PseudoClass;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -37,13 +39,6 @@ import javafx.util.Duration;
 
 /** A compact desktop Pomodoro timer. */
 public final class PomodoroApp extends Application {
-  private static final int WORK_MINUTES = 25;
-  private static final int BREAK_MINUTES = 5;
-  private static final String SOUND_ENABLED = "soundEnabled";
-  private static final String WINDOWS_NOTIFICATION_ENABLED = "windowsNotificationEnabled";
-  private static final String AUTOSTART_BREAK_ENABLED = "autostartBreakEnabled";
-  private static final String AUTOSTART_FOCUS_ENABLED = "autostartFocusEnabled";
-  private static final String MINIMIZE_ON_CLOSE_ENABLED = "minimizeOnCloseEnabled";
 
   private final Label modeLabel = new Label();
   private final Label timerLabel = new Label();
@@ -52,13 +47,10 @@ public final class PomodoroApp extends Application {
   private final Button startPauseButton = new Button("Start");
   private final Button resetButton = new Button("Reset");
   private final Button settingsButton = new Button("\u2699");
-  private final Spinner<Integer> workSpinner = this.minutesSpinner(WORK_MINUTES);
-  private final Spinner<Integer> breakSpinner = this.minutesSpinner(BREAK_MINUTES);
   private final Button workMinusButton = new Button("\u2212");
   private final Button workPlusButton = new Button("+");
   private final Button breakMinusButton = new Button("\u2212");
   private final Button breakPlusButton = new Button("+");
-  private final Preferences preferences = Preferences.userNodeForPackage(PomodoroApp.class);
   private final ToggleButton soundToggle = new ToggleButton();
   private final ToggleButton windowsNotificationToggle = new ToggleButton();
   private final ToggleButton autostartBreakToggle = new ToggleButton();
@@ -66,10 +58,13 @@ public final class PomodoroApp extends Application {
   private final ToggleButton minimizeOnCloseToggle = new ToggleButton();
   private final Timeline ticker = new Timeline(new KeyFrame(Duration.seconds(1), _ -> this.tick()));
 
+  private Settings settings;
+  private Spinner<Integer> workSpinner;
+  private Spinner<Integer> breakSpinner;
+
   private boolean running;
   private boolean onBreak;
   private boolean settingsOpen;
-  private int completedSessions;
   private int remainingSeconds;
   private int totalSeconds;
   private TrayIcon trayIcon;
@@ -83,8 +78,10 @@ public final class PomodoroApp extends Application {
     this.primaryStage = stage;
     Platform.setImplicitExit(false);
     this.ticker.setCycleCount(Animation.INDEFINITE);
-    this.resetTimer();
+    this.settings = Settings.load();
+    this.configureSpinners();
     this.configureSettings();
+    this.resetTimer();
 
     this.modeLabel.getStyleClass().add("mode-label");
     this.timerLabel.getStyleClass().add("timer-label");
@@ -171,6 +168,14 @@ public final class PomodoroApp extends Application {
       }
     });
     stage.show();
+  }
+
+  private void configureSpinners() {
+    this.workSpinner = this.minutesSpinner(this.settings.getWorkMinutes());
+    this.breakSpinner = this.minutesSpinner(this.settings.getBreakMinutes());
+    this.workSpinner.valueProperty().addListener((_, _, _) -> this.settings.setWorkMinutes(this.workSpinner.getValue()));
+    this.breakSpinner.valueProperty().addListener((_, _, _) -> this.settings.setBreakMinutes(this.breakSpinner.getValue()));
+    this.settings.save();
   }
 
   private Spinner<Integer> minutesSpinner(final int value) {
@@ -339,7 +344,8 @@ public final class PomodoroApp extends Application {
       this.showWindowsNotification(focusIntervalFinished);
     }
     if (!this.onBreak) {
-      this.completedSessions++;
+      this.settings.setCompletedSessions(this.settings.getCompletedSessions() + 1);
+      this.settings.save();
       this.onBreak = true;
       this.totalSeconds = this.breakSpinner.getValue() * 60;
     } else {
@@ -384,8 +390,8 @@ public final class PomodoroApp extends Application {
     final int seconds = this.remainingSeconds % 60;
     this.timerLabel.setText("%02d:%02d".formatted(minutes, seconds));
     this.modeLabel.setText(this.onBreak ? "BREAK" : "FOCUS");
-    this.modeLabel.pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("break"), this.onBreak);
-    this.sessionsLabel.setText("%d focus session%s completed".formatted(this.completedSessions, this.completedSessions == 1 ? "" : "s"));
+    this.modeLabel.pseudoClassStateChanged(PseudoClass.getPseudoClass("break"), this.onBreak);
+    this.sessionsLabel.setText("%d focus session%s completed".formatted(this.settings.getCompletedSessions(), this.settings.getCompletedSessions() == 1 ? "" : "s"));
     this.progress.setProgress(this.totalSeconds == 0 ? 0 : (double) this.remainingSeconds / this.totalSeconds);
   }
 
@@ -405,16 +411,31 @@ public final class PomodoroApp extends Application {
     this.styleToggle(this.autostartFocusToggle);
     this.styleToggle(this.minimizeOnCloseToggle);
 
-    this.soundToggle.setSelected(this.preferences.getBoolean(SOUND_ENABLED, true));
-    this.windowsNotificationToggle.setSelected(this.preferences.getBoolean(WINDOWS_NOTIFICATION_ENABLED, true));
-    this.autostartBreakToggle.setSelected(this.preferences.getBoolean(AUTOSTART_BREAK_ENABLED, false));
-    this.autostartFocusToggle.setSelected(this.preferences.getBoolean(AUTOSTART_FOCUS_ENABLED, false));
-    this.minimizeOnCloseToggle.setSelected(this.preferences.getBoolean(MINIMIZE_ON_CLOSE_ENABLED, false));
-    this.soundToggle.selectedProperty().addListener((_, _, enabled) -> this.preferences.putBoolean(SOUND_ENABLED, enabled));
-    this.windowsNotificationToggle.selectedProperty().addListener((_, _, enabled) -> this.preferences.putBoolean(WINDOWS_NOTIFICATION_ENABLED, enabled));
-    this.autostartBreakToggle.selectedProperty().addListener((_, _, enabled) -> this.preferences.putBoolean(AUTOSTART_BREAK_ENABLED, enabled));
-    this.autostartFocusToggle.selectedProperty().addListener((_, _, enabled) -> this.preferences.putBoolean(AUTOSTART_FOCUS_ENABLED, enabled));
-    this.minimizeOnCloseToggle.selectedProperty().addListener((_, _, enabled) -> this.preferences.putBoolean(MINIMIZE_ON_CLOSE_ENABLED, enabled));
+    this.soundToggle.setSelected(this.settings.isSoundEnabled());
+    this.windowsNotificationToggle.setSelected(this.settings.isWindowsNotificationEnabled());
+    this.autostartBreakToggle.setSelected(this.settings.isAutostartBreakEnabled());
+    this.autostartFocusToggle.setSelected(this.settings.isAutostartFocusEnabled());
+    this.minimizeOnCloseToggle.setSelected(this.settings.isMinimizeOnCloseEnabled());
+    this.soundToggle.selectedProperty().addListener((_, _, enabled) -> {
+      this.settings.setSoundEnabled(enabled);
+      this.settings.save();
+    });
+    this.windowsNotificationToggle.selectedProperty().addListener((_, _, enabled) -> {
+      this.settings.setWindowsNotificationEnabled(enabled);
+      this.settings.save();
+    });
+    this.autostartBreakToggle.selectedProperty().addListener((_, _, enabled) -> {
+      this.settings.setAutostartBreakEnabled(enabled);
+      this.settings.save();
+    });
+    this.autostartFocusToggle.selectedProperty().addListener((_, _, enabled) -> {
+      this.settings.setAutostartFocusEnabled(enabled);
+      this.settings.save();
+    });
+    this.minimizeOnCloseToggle.selectedProperty().addListener((_, _, enabled) -> {
+      this.settings.setMinimizeOnCloseEnabled(enabled);
+      this.settings.save();
+    });
   }
 
   private void styleToggle(final ToggleButton toggle) {
@@ -498,13 +519,13 @@ public final class PomodoroApp extends Application {
   private java.awt.Image notificationIcon() {
     final BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
     final var graphics = image.createGraphics();
-    graphics.setColor(new java.awt.Color(17, 36, 63));
+    graphics.setColor(new Color(17, 36, 63));
     graphics.fillOval(0, 0, 16, 16);
-    graphics.setColor(new java.awt.Color(107, 227, 186));
+    graphics.setColor(new Color(107, 227, 186));
     graphics.fillOval(2, 2, 12, 12);
-    graphics.setColor(new java.awt.Color(24, 36, 59));
+    graphics.setColor(new Color(24, 36, 59));
     graphics.fillOval(4, 4, 8, 8);
-    graphics.setColor(java.awt.Color.WHITE);
+    graphics.setColor(Color.WHITE);
     graphics.drawLine(8, 8, 8, 5);
     graphics.drawLine(8, 8, 10, 9);
     graphics.dispose();
@@ -518,7 +539,7 @@ public final class PomodoroApp extends Application {
   /** Keeps system feedback encapsulated and harmless on platforms without a toolkit. */
   private static final class ToolkitBeep {
     private static void play() {
-      Platform.runLater(() -> java.awt.Toolkit.getDefaultToolkit().beep());
+      Platform.runLater(() -> Toolkit.getDefaultToolkit().beep());
     }
   }
 }
