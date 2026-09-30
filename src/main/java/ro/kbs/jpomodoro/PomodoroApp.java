@@ -37,7 +37,9 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
-/** A compact desktop Pomodoro timer. */
+/**
+ * A compact desktop Pomodoro timer.
+ */
 public final class PomodoroApp extends Application {
 
   private final Label modeLabel = new Label();
@@ -48,9 +50,9 @@ public final class PomodoroApp extends Application {
   private final Button resetButton = new Button("Reset");
   private final Button settingsButton = new Button("\u2699");
   private final Button workMinusButton = new Button("\u2212");
-  private final Button workPlusButton = new Button("+");
+  private final Button workPlusButton = new Button("\u002b");
   private final Button breakMinusButton = new Button("\u2212");
-  private final Button breakPlusButton = new Button("+");
+  private final Button breakPlusButton = new Button("\u002b");
   private final ToggleButton soundToggle = new ToggleButton();
   private final ToggleButton windowsNotificationToggle = new ToggleButton();
   private final ToggleButton autostartBreakToggle = new ToggleButton();
@@ -118,9 +120,13 @@ public final class PomodoroApp extends Application {
     this.workSpinner.valueProperty().addListener((_, _, _) -> this.updateIdleDuration());
     this.breakSpinner.valueProperty().addListener((_, _, _) -> this.updateIdleDuration());
     this.workMinusButton.setOnAction(_ -> this.workSpinner.decrement());
+    this.workMinusButton.setFocusTraversable(false);
     this.workPlusButton.setOnAction(_ -> this.workSpinner.increment());
+    this.workPlusButton.setFocusTraversable(false);
     this.breakMinusButton.setOnAction(_ -> this.breakSpinner.decrement());
+    this.breakMinusButton.setFocusTraversable(false);
     this.breakPlusButton.setOnAction(_ -> this.breakSpinner.increment());
+    this.breakPlusButton.setFocusTraversable(false);
 
     final BorderPane mainView = new BorderPane();
     mainView.setTop(headerPane);
@@ -159,11 +165,7 @@ public final class PomodoroApp extends Application {
     stage.setScene(scene);
     stage.setOnCloseRequest(event -> {
       event.consume();
-      if (this.minimizeOnCloseToggle.isSelected()) {
-        if (!this.minimizeToTray()) {
-          this.shutdownApplication();
-        }
-      } else {
+      if (!this.minimizeOnCloseToggle.isSelected() || !this.minimizeToTray()) {
         this.shutdownApplication();
       }
     });
@@ -172,9 +174,22 @@ public final class PomodoroApp extends Application {
 
   private void configureSpinners() {
     this.workSpinner = this.minutesSpinner(this.settings.getWorkMinutes());
-    this.breakSpinner = this.minutesSpinner(this.settings.getBreakMinutes());
     this.workSpinner.valueProperty().addListener((_, _, _) -> this.settings.setWorkMinutes(this.workSpinner.getValue()));
+//    this.workSpinner.getEditor().setOnKeyPressed(event -> {
+//      if (event.getCode() == KeyCode.TAB && !event.isShiftDown()) {
+//        event.consume();
+//        this.breakSpinner.getEditor().requestFocus();
+//      }
+//    });
+
+    this.breakSpinner = this.minutesSpinner(this.settings.getBreakMinutes());
     this.breakSpinner.valueProperty().addListener((_, _, _) -> this.settings.setBreakMinutes(this.breakSpinner.getValue()));
+//    this.breakSpinner.getEditor().setOnKeyPressed(event -> {
+//      if (event.getCode() == KeyCode.TAB && event.isShiftDown()) {
+//        event.consume();
+//        this.workSpinner.getEditor().requestFocus();
+//      }
+//    });
     this.settings.save();
   }
 
@@ -184,6 +199,11 @@ public final class PomodoroApp extends Application {
     spinner.setEditable(true);
     spinner.getStyleClass().add("interval-spinner");
     spinner.setPrefWidth(52);
+    spinner.getEditor().focusedProperty().addListener((_, _, focused) -> {
+      if (focused) {
+        Platform.runLater(() -> spinner.getEditor().selectAll());
+      }
+    });
     return spinner;
   }
 
@@ -203,10 +223,9 @@ public final class PomodoroApp extends Application {
     intervals.setAlignment(Pos.CENTER);
 
     final VBox content = new VBox(14, panelHeader, this.sectionBlock("Intervals", intervals),
-        this.sectionBlock("Alerts", this.toggleRow("Sound on complete", this.soundToggle),
-            this.toggleRow("Windows notification", this.windowsNotificationToggle)),
-        this.sectionBlock("Behavior", this.toggleRow("Auto-start break", this.autostartBreakToggle),
-            this.toggleRow("Auto-start focus", this.autostartFocusToggle), this.toggleRow("Minimize on close", this.minimizeOnCloseToggle)));
+        this.sectionBlock("Alerts", this.toggleRow("Sound on complete", this.soundToggle), this.toggleRow("Windows notification", this.windowsNotificationToggle)),
+        this.sectionBlock("Behavior", this.toggleRow("Auto-start break", this.autostartBreakToggle), this.toggleRow("Auto-start focus", this.autostartFocusToggle),
+            this.toggleRow("Minimize on close", this.minimizeOnCloseToggle)));
     content.setAlignment(Pos.TOP_LEFT);
     content.setPadding(new Insets(20, 24, 24, 24));
     content.getStyleClass().add("settings-panel");
@@ -274,7 +293,11 @@ public final class PomodoroApp extends Application {
     slideIn.setFromX(width);
     slideIn.setToX(0);
 
-    new ParallelTransition(fadeIn, slideIn).play();
+    final ParallelTransition open = new ParallelTransition(fadeIn, slideIn);
+    open.setOnFinished(_ -> {
+      Platform.runLater(this.workSpinner.getEditor()::requestFocus);
+    });
+    open.play();
   }
 
   private void closeSettings() {
@@ -391,7 +414,8 @@ public final class PomodoroApp extends Application {
     this.timerLabel.setText("%02d:%02d".formatted(minutes, seconds));
     this.modeLabel.setText(this.onBreak ? "BREAK" : "FOCUS");
     this.modeLabel.pseudoClassStateChanged(PseudoClass.getPseudoClass("break"), this.onBreak);
-    this.sessionsLabel.setText("%d focus session%s completed".formatted(this.settings.getCompletedSessions(), this.settings.getCompletedSessions() == 1 ? "" : "s"));
+    final String sessionText = "%d focus session%s completed".formatted(this.settings.getCompletedSessions(), this.settings.getCompletedSessions() == 1 ? "" : "s");
+    this.sessionsLabel.setText(sessionText);
     this.progress.setProgress(this.totalSeconds == 0 ? 0 : (double) this.remainingSeconds / this.totalSeconds);
   }
 
